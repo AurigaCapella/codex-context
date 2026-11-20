@@ -8,6 +8,7 @@ import {withAppServer} from './app-server.mjs';
 import {configuredInstructions, configuredSchemas} from './local-inspection.mjs';
 import {estimateCosts, estimateStep} from './ui/pricing.mjs';
 import {createAppearance} from './appearance.mjs';
+import {createNotifications} from './notifications.mjs';
 
 const {values} = parseArgs({options: {port: {type: 'string', default: '47371'}}});
 const port = Number(values.port);
@@ -17,6 +18,7 @@ const origin = `http://${host}`;
 const codexHome = process.env.CODEX_HOME || join(homedir(), '.codex');
 const sessions = createSessions(codexHome);
 const readAppearance = createAppearance(codexHome);
+const notifications = createNotifications(codexHome, sessions.invalidate);
 const inProgress = new Set();
 const catalogRequests = new Map();
 const estimates = new WeakMap();
@@ -86,6 +88,7 @@ async function route(request, response) {
       return json(response, 403, {error: '请求来源不匹配'});
     }
     json(response, 200, {stopping: true});
+    notifications.close();
     return server.close();
   }
   if (request.method === 'GET' && path === '/api/threads') {
@@ -94,15 +97,39 @@ async function route(request, response) {
   if (request.method === 'GET' && path === '/api/appearance') {
     return json(response, 200, await readAppearance());
   }
+  if (request.method === 'GET' && path === '/api/events') {
+    const id = url.searchParams.get('id')?.toLowerCase();
+    if (id && !threadIdPattern.test(id)) return json(response, 400, {error: '无效的会话 ID'});
+    return notifications.subscribe(response, id);
+  }
 
   const id = url.searchParams.get('id')?.toLowerCase();
   if (!id || !threadIdPattern.test(id)) return json(response, 404, {error: '未找到会话'});
-  const snapshot = await sessions.read(id, {details: path !== '/api/thread-metrics'});
+  const turnId = url.searchParams.get('turn');
+  const callId = url.searchParams.get('call');
+  if ((path === '/api/turn' || path === '/api/call-preview' || path === '/api/call') &&
+      (!turnId || ((path === '/api/call' || path === '/api/call-preview') && !callId))) {
+    return json(response, 404, {error: '未找到轮次或工具调用'});
+  }
+  const options = {
+    '/api/thread-metrics': {details: false},
+    '/api/thread-summary': {summary: true},
+    '/api/turn': {turnId},
+    '/api/call': {turnId, callId},
+    '/api/call-preview': {turnId, callId},
+    '/api/instructions': {resource: 'instructions'},
+    '/api/schema': {resource: 'schema', schemaName: url.searchParams.get('name')},
+    '/api/request-context': {resource: 'request-context'},
+    '/api/configured-instructions': {details: false},
+    '/api/mcp-schemas': {details: false},
+    '/api/fork': {details: false}
+  };
+  const snapshot = await sessions.read(id, options[path]);
   if (!snapshot) return json(response, 404, {error: '本地会话不存在'});
   if (request.method === 'GET' && path === '/api/thread-metrics') {
     return json(response, 200, metrics(snapshot));
   }
-  if (request.method === 'GET' && path === '/api/thread') {
+  if (request.method === 'GET' && (path === '/api/thread' || path === '/api/thread-summary')) {
     const {instructions, schemas, turns, ...summary} = snapshot;
     return json(response, 200, {
       ...summary, hasInstructions: Boolean(instructions), schemaNames: schemas.map(([name]) => name),
@@ -111,13 +138,16 @@ async function route(request, response) {
         ...turn,
         calls: turn.calls.map(({details, ...call}) => call),
         steps: turn.steps.map(({providerContext, ...step}) => ({
-          ...step, hasProviderContext: Boolean(providerContext), apiEstimate: estimateStep(step, turn)
+          ...step, hasProviderContext: step.hasProviderContext ?? Boolean(providerContext), apiEstimate: estimateStep(step, turn)
         }))
       }))
     });
   }
+  if (request.method === 'GET' && path === '/api/turn') {
+    const turn = snapshot.turns.find(item => item.id === turnId);
+    return turn ? json(response, 200, {messages: turn.messages}) : json(response, 404, {error: '未找到轮次'});
+  }
   if (request.method === 'GET' && path === '/api/request-context') {
-    const turnId = url.searchParams.get('turn');
     const responseId = url.searchParams.get('response');
     const turn = snapshot.turns.find(item => item.id === turnId);
     const step = responseId ? turn?.steps.find(item => item.id === responseId) : null;
@@ -145,10 +175,13 @@ async function route(request, response) {
     const match = snapshot.schemas.find(([name]) => name === url.searchParams.get('name'));
     return match ? json(response, 200, {schema: match[1]}) : json(response, 404, {error: '缺少本地 Schema'});
   }
-  if (request.method === 'GET' && path === '/api/call') {
-    const turn = snapshot.turns.find(turn => turn.id === url.searchParams.get('turn'));
-    const call = turn?.calls.find(call => call.id === url.searchParams.get('call') && call.source === url.searchParams.get('source'));
-    return call ? json(response, 200, call) : json(response, 404, {error: '未找到调用'});
+  if (request.method === 'GET' && (path === '/api/call' || path === '/api/call-preview')) {
+    const turn = snapshot.turns.find(turn => turn.id === turnId);
+    const call = turn?.calls?.find(call => call.id === callId && call.source === url.searchParams.get('source'));
+    if (!call) return json(response, 404, {error: '未找到调用'});
+    if (path === '/api/call') return json(response, 200, call);
+    const value = JSON.stringify(call.details, null, 2) ?? '';
+    return json(response, 200, {text: value.slice(0, 8192), truncated: value.length > 8192});
   }
   if (request.method === 'POST' && path === '/api/fork') {
     if (request.headers.origin !== origin || request.headers['x-context-action'] !== 'fork') {

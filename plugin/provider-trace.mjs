@@ -97,7 +97,13 @@ export async function readProviderTrace(path, previous, options) {
     if (info.size > maxTraceBytes) return {key, records: new Map(), error: '上游记录超过 4 MiB'};
     const bytes = Buffer.alloc(info.size);
     const {bytesRead} = await file.read(bytes, 0, bytes.length, 0);
-    return {key, records: parseProviderTrace(bytes.toString('utf8', 0, bytesRead), options), error: null};
+    const records = parseProviderTrace(bytes.toString('utf8', 0, bytesRead), options);
+    if (options?.summary) {
+      for (const [id, {context, ...record}] of records) {
+        records.set(id, {...record, hasContext: Boolean(context)});
+      }
+    }
+    return {key, records, error: null};
   } catch {
     return {key: null, records: new Map(), error: '无法读取本地上游记录'};
   } finally {
@@ -126,6 +132,7 @@ export function attachProviderModels(snapshot, trace) {
         modelConflict: conflict,
         gatewayTiming: conflict ? null : record?.timing ?? null,
         providerContext: conflict ? null : record?.context ?? null,
+        hasProviderContext: !conflict && Boolean(record?.hasContext || record?.context),
         providerContextConflict: !conflict && Boolean(record?.contextConflict)
       };
     })

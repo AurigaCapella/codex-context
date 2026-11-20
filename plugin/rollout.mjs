@@ -25,10 +25,18 @@ function delta(now, previous) {
   ]));
 }
 
-function text(content) {
-  if (typeof content === 'string') return content;
+function text(content, limit = Infinity) {
+  if (typeof content === 'string') return content.slice(0, limit);
   if (!Array.isArray(content)) return '';
-  return content.map(part => typeof part?.text === 'string' ? part.text : '').filter(Boolean).join('\n');
+  if (limit === Infinity) return content.map(part => typeof part?.text === 'string' ? part.text : '').filter(Boolean).join('\n');
+  let result = '';
+  for (const part of content) {
+    if (typeof part?.text !== 'string' || !part.text) continue;
+    if (result) result += '\n';
+    result += part.text.slice(0, limit - result.length);
+    if (result.length >= limit) break;
+  }
+  return result;
 }
 
 function makeTurn(id, baseline, model, details) {
@@ -82,7 +90,7 @@ function expandTools(source) {
   });
 }
 
-export function createRollout({details = true} = {}) {
+export function createRollout({details = true, summary = false, turnId, callId, resource, schemaName} = {}) {
   const turns = new Map();
   const schemas = new Map();
   const orphanOutputs = new Map();
@@ -98,15 +106,27 @@ export function createRollout({details = true} = {}) {
   let windowSize = null;
   let latestCount = null;
   let corrupt = 0;
+  const full = details && !summary && !turnId && !resource;
+  const savesMessages = turn => full || (turnId === turn.id && !callId);
+  const savesCall = (turn, id) => full || (turnId === turn?.id && id === callId);
 
   function getTurn(id) {
     if (!id) return current;
-    if (!turns.has(id)) turns.set(id, makeTurn(id, cumulative, model, details));
+    if (!turns.has(id)) turns.set(id, makeTurn(id, cumulative, model, full || summary || id === turnId));
     return turns.get(id);
   }
 
   function saveSchemas(entries) {
-    for (const entry of entries) schemas.set(entry.name, entry.schema);
+    for (const entry of entries) {
+      if (full || (resource === 'schema' && entry.name === schemaName)) schemas.set(entry.name, entry.schema);
+      else if (summary) schemas.set(entry.name, null);
+    }
+  }
+
+  function savePreview(turn, role, content, phase) {
+    if (!summary || (role === 'assistant' && phase === 'commentary') || (role === 'user' && turn.preview)) return;
+    const preview = text(content, 180).replace(/\s+/g, ' ').trim();
+    if (preview) turn.preview = preview;
   }
 
   function onUsage(p, at, responseModel) {
@@ -143,7 +163,8 @@ export function createRollout({details = true} = {}) {
           turn.state = p.type === 'turn_aborted' ? 'interrupted' : 'complete';
           turn.ttft = count(p.time_to_first_token_ms);
           turn.duration = count(p.duration_ms);
-          if (details && p.last_agent_message && ![...turn.messages.values()].some(message => message.role === 'assistant' && message.text === p.last_agent_message)) {
+          savePreview(turn, 'assistant', p.last_agent_message);
+          if (savesMessages(turn) && p.last_agent_message && ![...turn.messages.values()].some(message => message.role === 'assistant' && message.text === p.last_agent_message)) {
             turn.messages.set('final', {role: 'assistant', text: p.last_agent_message, phase: 'final_answer'});
           }
         }
@@ -175,7 +196,7 @@ export function createRollout({details = true} = {}) {
       case 'model_rerouted':
       case 'model_reroute':
         if (turn) turn.rerouted = p.to_model ?? p.toModel ?? null;
-        if (details) events.push({at, type: '模型改派', turnId: turn?.id, detail: p.to_model ?? p.toModel});
+        if (full || summary) events.push({at, type: '模型改派', turnId: turn?.id, detail: p.to_model ?? p.toModel});
         break;
       case 'item_started':
       case 'item_completed': {
@@ -187,9 +208,13 @@ export function createRollout({details = true} = {}) {
         if (!details) break;
         if (p.type === 'item_completed' && ['UserMessage', 'AgentMessage'].includes(item.type)) {
           const role = item.type === 'UserMessage' ? 'user' : 'assistant';
-          turn.messages.set(item.id, {role, text: text(item.content), phase: item.phase});
-        } else if (callTypes.has(item.type)) {
-          turn.calls.set(`item:${item.id}`, {id: item.id, name: item.tool ?? item.type, source: 'item', at, details: itemDetails(item)});
+          savePreview(turn, role, item.content, item.phase);
+          if (savesMessages(turn)) turn.messages.set(item.id, {role, text: text(item.content), phase: item.phase});
+        } else if (callTypes.has(item.type) && (summary || savesCall(turn, item.id))) {
+          turn.calls.set(`item:${item.id}`, {
+            id: item.id, name: item.tool ?? item.type, source: 'item', at,
+            ...(summary ? {} : {details: itemDetails(item)})
+          });
         }
         break;
       }
@@ -197,13 +222,14 @@ export function createRollout({details = true} = {}) {
       case 'user_message': {
         if (!details || !turn || typeof p.message !== 'string') break;
         const role = p.type === 'agent_message' ? 'assistant' : 'user';
-        if (![...turn.messages.values()].some(message => message.role === role && message.text === p.message)) {
+        savePreview(turn, role, p.message, p.phase);
+        if (savesMessages(turn) && ![...turn.messages.values()].some(message => message.role === role && message.text === p.message)) {
           turn.messages.set(`message:${turn.messages.size}`, {role, text: p.message, phase: p.phase});
         }
         break;
       }
       case 'context_compacted':
-        if (details) events.push({at, type: '上下文压缩', turnId: turn?.id});
+        if (full || summary) events.push({at, type: '上下文压缩', turnId: turn?.id});
         break;
       case 'thread_rolled_back': {
         const ids = [...turns.keys()];
@@ -216,25 +242,29 @@ export function createRollout({details = true} = {}) {
   }
 
   function onResponse(p, at) {
-    if (p.type === 'additional_tools') saveSchemas(schemaEntries(p.tools));
+    if (p.type === 'additional_tools' && (full || summary || resource === 'schema')) saveSchemas(schemaEntries(p.tools));
     if (!current) return;
     if (p.type === 'message' && p.role === 'assistant') {
-      const content = text(p.content);
-      if (content && ![...current.messages.values()].some(message => message.role === 'assistant' && message.text === content)) {
-        current.messages.set(p.id ?? `message:${current.messages.size}`, {role: p.role, text: content, phase: p.phase});
+      savePreview(current, p.role, p.content, p.phase);
+      if (savesMessages(current)) {
+        const content = text(p.content);
+        if (content && ![...current.messages.values()].some(message => message.role === 'assistant' && message.text === content)) {
+          current.messages.set(p.id ?? `message:${current.messages.size}`, {role: p.role, text: content, phase: p.phase});
+        }
       }
     }
     if (rawCall.test(p.type)) {
       const id = p.call_id ?? p.id;
-      if (!id) return;
-      owners.set(id, current);
+      if (!id || (!summary && !savesCall(current, id))) return;
+      if (!summary) owners.set(id, current);
       current.calls.set(id, {
         id, name: [p.namespace, p.name].filter(Boolean).join('.') || p.type,
-        source: 'response', at, details: {arguments: p.arguments ?? p.input ?? p.action, output: orphanOutputs.get(id)}
+        source: 'response', at,
+        ...(summary ? {} : {details: {arguments: p.arguments ?? p.input ?? p.action, output: orphanOutputs.get(id)}})
       });
       orphanOutputs.delete(id);
     }
-    if (rawResult.test(p.type) && p.call_id) {
+    if ((full || (callId && p.call_id === callId)) && rawResult.test(p.type) && p.call_id) {
       const call = owners.get(p.call_id)?.calls.get(p.call_id);
       if (call) call.details.output = p.output;
       else orphanOutputs.set(p.call_id, p.output);
@@ -251,7 +281,7 @@ export function createRollout({details = true} = {}) {
         case 'session_meta':
           meta = {id: p.id, cwd: p.cwd, created: p.timestamp ?? at, parent: p.parent_thread_id ?? p.forked_from_id, historyMode: p.history_mode};
           provider = p.model_provider ?? provider;
-          if (details) saveSchemas(schemaEntries(p.dynamic_tools));
+          if (full || summary || resource === 'schema') saveSchemas(schemaEntries(p.dynamic_tools));
           break;
         case 'turn_context': {
           model = p.model ?? model;
@@ -260,17 +290,20 @@ export function createRollout({details = true} = {}) {
           break;
         }
         case 'world_state':
-          if (!details) break;
-          if (typeof p.state?.agents_md?.text === 'string') instructions = p.state.agents_md.text;
-          saveSchemas(expandTools(p.state?.tools));
-          saveSchemas(expandTools(p.state?.top_level_tools));
+          if ((full || summary || resource === 'instructions') && typeof p.state?.agents_md?.text === 'string') {
+            instructions = summary ? Boolean(p.state.agents_md.text) : p.state.agents_md.text;
+          }
+          if (full || summary || resource === 'schema') {
+            saveSchemas(expandTools(p.state?.tools));
+            saveSchemas(expandTools(p.state?.top_level_tools));
+          }
           break;
         case 'token_usage_record':
           onUsage(p, at, p.response_model ?? p.usage?.response_model ?? null);
           break;
         case 'compacted':
           contextSize = null;
-          if (details && (events.at(-1)?.type !== '上下文压缩' || events.at(-1)?.turnId !== current?.id)) {
+          if ((full || summary) && (events.at(-1)?.type !== '上下文压缩' || events.at(-1)?.turnId !== current?.id)) {
             events.push({at, type: '上下文压缩', turnId: current?.id});
           }
           break;
@@ -295,10 +328,8 @@ export function createRollout({details = true} = {}) {
           ...data, usage: data.usage ?? sampledUsage, steps,
           firstTextDelayMs: estimate,
           outputWindowMs: tpsWindowMs > 0 ? tpsWindowMs : null,
-          ...(details && {
-            messages: [...messages.values()].filter(message => message.text),
-            calls: [...calls.values()]
-          })
+          ...(savesMessages(turn) && {messages: [...messages.values()].filter(message => message.text)}),
+          ...(calls && {calls: [...calls.values()]})
         };
       });
       return {

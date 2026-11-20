@@ -6,19 +6,19 @@ using System.Windows.Automation;
 
 public static class ComposerAnchor
 {
-    public static Task<string> ReadThreadAsync(IntPtr window, Dictionary<string, string> titles)
+    public static Task<string?> ReadThreadAsync(IntPtr window, Dictionary<string, string> titles)
     {
         return Task.Run(() => ReadThread(window, titles));
     }
 
-    private static string ReadThread(IntPtr window, Dictionary<string, string> titles)
+    private static string? ReadThread(IntPtr window, Dictionary<string, string> titles)
     {
         var root = AutomationElement.FromHandle(window);
         if (root == null) return null;
         var condition = new AndCondition(
             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit),
             new PropertyCondition(AutomationElement.ClassNameProperty, "ProseMirror"));
-        AutomationElement composer = null;
+        AutomationElement? composer = null;
         foreach (AutomationElement edit in root.FindAll(TreeScope.Descendants, condition))
         {
             if (edit.Current.IsOffscreen) continue;
@@ -53,10 +53,10 @@ public static class ComposerAnchor
         return Rect.Empty;
     }
 
-    private static string FindActiveThread(AutomationElement root, Rect pane, Dictionary<string, string> titles)
+    private static string? FindActiveThread(AutomationElement root, Rect pane, Dictionary<string, string> titles)
     {
         if (pane.IsEmpty) return null;
-        string found = null;
+        string? found = null;
         var toolbars = new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ToolBar);
         var text = new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Text);
         foreach (AutomationElement bar in root.FindAll(TreeScope.Descendants, toolbars))
@@ -70,8 +70,7 @@ public static class ComposerAnchor
                 Rect rect = props.BoundingRectangle;
                 if (rect.IsEmpty || props.IsOffscreen || rect.Left < pane.Left || rect.Right > pane.Right ||
                     rect.Bottom > pane.Top || rect.Bottom < pane.Top - 220) continue;
-                string id;
-                if (string.IsNullOrEmpty(props.Name) || !titles.TryGetValue(props.Name, out id) ||
+                if (string.IsNullOrEmpty(props.Name) || !titles.TryGetValue(props.Name, out var id) ||
                     string.IsNullOrEmpty(id)) continue;
                 if (found != null && !string.Equals(found, id, StringComparison.Ordinal)) return null;
                 found = id;

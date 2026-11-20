@@ -8,7 +8,7 @@
 
 ## 启动
 
-需要 Node.js 22+、PowerShell 7 和支持 `thread/fork.lastTurnId` 的 Codex CLI。在 GitHub Releases 下载所需版本的 Windows ZIP，解压后在顶层目录运行以下命令。
+需要 Node.js 22+、PowerShell 7 和支持 `thread/fork.lastTurnId` 的 Codex CLI。原生状态栏需要 Windows 的 [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)。在 GitHub Releases 下载所需版本的 Windows ZIP，解压后在顶层目录运行以下命令。
 
 ```powershell
 & .\plugin\open.ps1
@@ -50,14 +50,14 @@ codex plugin add codex-context@context-lab
 
 ## 数据与分支
 
-- 收起时只读取指标摘要，生成时约每秒刷新，空闲时约每三秒刷新。隐藏时暂停刷新。标题查询只在 Codex 主窗口位于前台时运行。服务只监听本机回环地址。
-- 展开后按需创建检查面板和载入详情，收起时释放面板和详情。后端的单会话详情缓存约 20 秒后过期。
+- 日志、跟踪记录或主题配置变化会触发刷新，生成时合并频繁更新。监听中断时自动恢复定时刷新并重连。隐藏时暂停请求和文件事件订阅。选择聊天或跟随当前聊天时按需读取会话列表，标题查询只在 Codex 主窗口位于前台时运行。服务只监听本机回环地址。
+- 展开后先读取轮次摘要，选中轮次才读取正文。工具调用先显示最多 8,192 字符的预览，可点「查看完整输出」。收起时释放面板，后端的摘要和选中详情缓存约 20 秒后过期。
 - 「回复与分支」在每条回复记录旁显示单轮用量和分支按钮。点击已完成轮次的「分支」后，App Server 创建包含该轮及之前历史的新会话。点击「切到会话」可跳转到 Codex。归档会话仅供查看。
 - 配置模型、请求模型、响应模型和改派分别显示。请求或响应模型只有在本地记录提供相应字段时才有值。
 - 指令面板支持日志里留存的 `AGENTS.md` 快照。完整服务端系统提示词没有公开接口。Schema 与调用详情取自本地会话已有的工具记录，覆盖范围依 Codex 版本与会话而异。
 - 「配置的指令文件」通过 Codex 的有效配置读取用户或工作区指定的 `model_instructions_file`，显示当前磁盘上的完整文件（上限 2 MiB）。此处是配置文件原文，旧会话的文件版本可能不同。[Codex 配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)
 - 在「Schema」点击「查询已配置 MCP 的 Schema」后，插件通过 App Server 查询当前本地配置中的 MCP 工具目录，显示服务商提供的输入和可选输出 Schema。已配置目录与会话日志留存的 Schema 分别标注。[Codex App Server](https://learn.chatgpt.com/docs/app-server)
-- 官方插件接口提供启动入口。PowerShell 7.6 使用随插件提供的编译版 WPF 窗口辅助模块，可用 `./build-native-helper.ps1` 重新生成。
+- 官方插件接口提供启动入口。常驻状态栏由编译后的 C# WPF 程序运行。修改界面源码后，可使用 .NET 10 SDK 运行 `./build-widget.ps1` 重新生成插件内的程序。
 
 [Codex App Server 分支接口](https://learn.chatgpt.com/docs/app-server) · [Codex 桌面跳转链接](https://learn.chatgpt.com/docs/reference/commands#deep-links)
 

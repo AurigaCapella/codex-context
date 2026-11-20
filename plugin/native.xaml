@@ -112,7 +112,7 @@
                    Text="连接本机会话日志" TextTrimming="CharacterEllipsis"/>
         <Grid DockPanel.Dock="Top" Margin="0,0,0,7">
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <ComboBox x:Name="Threads" DisplayMemberPath="label" SelectedValuePath="id"
+          <ComboBox x:Name="Threads" DisplayMemberPath="Label" SelectedValuePath="Id"
                     IsTextSearchEnabled="True" AutomationProperties.Name="选择本机会话" Margin="0,0,5,0"/>
           <CheckBox x:Name="FollowChat" Grid.Column="1" Content="跟随聊天" Foreground="{DynamicResource ThemeText}" IsChecked="True" VerticalAlignment="Center"
                     Margin="3,0,6,0" ToolTip="跟随当前 Codex 聊天，遇到重名时保留当前选择"/>
@@ -132,14 +132,14 @@
                   <DataTemplate>
                     <Border Padding="6,4" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1">
                       <StackPanel>
-                        <TextBlock Text="{Binding label}" FontSize="11" Foreground="{DynamicResource ThemeMuted}"/>
-                        <TextBlock Text="{Binding preview}" TextTrimming="CharacterEllipsis" Margin="0,2,0,3"/>
+                        <TextBlock Text="{Binding Label}" FontSize="11" Foreground="{DynamicResource ThemeMuted}"/>
+                        <TextBlock Text="{Binding Preview}" TextTrimming="CharacterEllipsis" Margin="0,2,0,3"/>
                         <Grid>
                           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                          <TextBlock Text="{Binding usage}" FontSize="11" Foreground="{DynamicResource ThemeMetric}"
+                          <TextBlock Text="{Binding Usage}" FontSize="11" Foreground="{DynamicResource ThemeMetric}"
                                      TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                          <Button Grid.Column="1" Content="分支 ↗" Tag="{Binding id}" IsEnabled="{Binding canFork}"
-                                  AutomationProperties.Name="{Binding branchLabel}" FontSize="11"/>
+                          <Button Grid.Column="1" Content="分支 ↗" Tag="{Binding Id}" IsEnabled="{Binding CanFork}"
+                                  AutomationProperties.Name="{Binding BranchLabel}" FontSize="11"/>
                         </Grid>
                       </StackPanel>
                     </Border>
@@ -160,7 +160,9 @@
           </TabItem>
           <TabItem Header="工具调用">
             <DockPanel Margin="6">
-              <ListBox x:Name="Calls" DockPanel.Dock="Top" DisplayMemberPath="label" Height="100" AutomationProperties.Name="工具调用列表"/>
+              <ListBox x:Name="Calls" DockPanel.Dock="Top" DisplayMemberPath="Label" Height="100" AutomationProperties.Name="工具调用列表"/>
+              <Button x:Name="FullCall" DockPanel.Dock="Bottom" Content="查看完整输出" IsEnabled="False"
+                      HorizontalAlignment="Left" Margin="0,6,0,0"/>
               <TextBox x:Name="CallDetails" Margin="0,6,0,0" IsReadOnly="True" AutomationProperties.Name="调用参数和结果"/>
             </DockPanel>
           </TabItem>
@@ -176,7 +178,7 @@
           </TabItem>
           <TabItem Header="请求步">
             <DockPanel Margin="6">
-              <ListBox x:Name="Steps" DockPanel.Dock="Top" DisplayMemberPath="label" Height="100" AutomationProperties.Name="模型请求步列表"/>
+              <ListBox x:Name="Steps" DockPanel.Dock="Top" DisplayMemberPath="Label" Height="100" AutomationProperties.Name="模型请求步列表"/>
               <Button x:Name="RequestContext" DockPanel.Dock="Bottom" Content="请求指令与 Schema" IsEnabled="False"
                       HorizontalAlignment="Left" Margin="0,6,0,0"/>
               <TextBox x:Name="StepDetails" Margin="0,6,0,0" IsReadOnly="True" AutomationProperties.Name="单步请求和上游模型"/>

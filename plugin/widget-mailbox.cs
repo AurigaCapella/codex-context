@@ -11,18 +11,14 @@ public sealed class WidgetMailbox : IDisposable
     private readonly int processId;
     private readonly CancellationTokenSource stop = new CancellationTokenSource();
     private readonly Task listener;
-    private string latest;
+    private readonly Action<string> received;
 
-    public WidgetMailbox(string name, int processId)
+    public WidgetMailbox(string name, int processId, Action<string> received)
     {
         this.name = name;
         this.processId = processId;
+        this.received = received;
         listener = ListenAsync(OpenPipe(), stop.Token);
-    }
-
-    public string Take()
-    {
-        return Interlocked.Exchange(ref latest, null);
     }
 
     private NamedPipeServerStream OpenPipe()
@@ -31,7 +27,7 @@ public sealed class WidgetMailbox : IDisposable
             PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
     }
 
-    private async Task ListenAsync(NamedPipeServerStream first, CancellationToken stopped)
+    private async Task ListenAsync(NamedPipeServerStream? first, CancellationToken stopped)
     {
         while (!stopped.IsCancellationRequested)
         {
@@ -71,7 +67,7 @@ public sealed class WidgetMailbox : IDisposable
         Guid id;
         if ((mode != 'O' && mode != 'D') || (threadId.Length > 0 && !Guid.TryParseExact(threadId, "D", out id)))
             return;
-        Interlocked.Exchange(ref latest, mode + threadId);
+        received(mode + threadId);
         var ack = BitConverter.GetBytes(processId);
         await pipe.WriteAsync(ack, 0, ack.Length, token).ConfigureAwait(false);
     }

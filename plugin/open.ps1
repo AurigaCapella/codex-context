@@ -80,16 +80,20 @@ try {
         return
     }
 
-    $pwsh = (Get-Command pwsh.exe -CommandType Application | Select-Object -First 1).Source
-    $panel = Join-Path $PSScriptRoot 'native.ps1'
-    $panelArguments = '-NoLogo -NoProfile -STA -File "{0}" -Port {1}' -f $panel,$Port
+    $dotnet = (Get-Command dotnet.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+    if (-not $dotnet -or -not (& $dotnet --list-runtimes | Where-Object { $_ -match '^Microsoft\.WindowsDesktop\.App 10\.' })) {
+        throw 'Codex Context GUI requires the .NET 10 Desktop Runtime.'
+    }
+    $panel = Join-Path $PSScriptRoot 'widget/ContextWidget.dll'
+    if (-not (Test-Path -LiteralPath $panel)) { throw 'The compiled ContextWidget.dll is missing. Run build-widget.ps1 before packaging.' }
+    $panelArguments = 'exec "{0}" -Port {1}' -f $panel,$Port
     if ($ThreadId) { $panelArguments += " -ThreadId $ThreadId" }
     if ($Detached) { $panelArguments += ' -Detached' }
     $eventName = 'Local\CodexContext-' + [Guid]::NewGuid().ToString('N')
     $ready = [Threading.EventWaitHandle]::new($false,[Threading.EventResetMode]::ManualReset,$eventName)
     try {
         $panelArguments += " -ReadyEvent $eventName -MailboxName $mailboxName"
-        $panelProcess = Start-Process -FilePath $pwsh -ArgumentList $panelArguments -WindowStyle Hidden -PassThru
+        $panelProcess = Start-Process -FilePath $dotnet -ArgumentList $panelArguments -WindowStyle Hidden -PassThru
         $expires = [DateTime]::UtcNow.AddSeconds(12)
         while (-not $ready.WaitOne(200)) {
             if ($panelProcess.HasExited) { throw "Codex Context GUI exited with code $($panelProcess.ExitCode)." }

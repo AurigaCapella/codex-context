@@ -29,7 +29,9 @@ public sealed class ContextWindows : IDisposable
     private delegate void WinEventCallback(IntPtr hook, uint type, IntPtr hwnd, int objectId, int childId, uint thread, uint time);
     private readonly WinEventCallback onEvent;
     private readonly IntPtr foregroundHook;
+    private readonly IntPtr focusHook;
     private readonly IntPtr widget;
+    private IntPtr chatWindow;
     private bool dirty = true;
 
     public ContextWindows(IntPtr widget)
@@ -37,6 +39,7 @@ public sealed class ContextWindows : IDisposable
         this.widget = widget;
         onEvent = OnEvent;
         foregroundHook = SetWinEventHook(3, 3, IntPtr.Zero, onEvent, 0, 0, 0);
+        focusHook = SetWinEventHook(0x8005, 0x8005, IntPtr.Zero, onEvent, 0, 0, 2);
     }
 
     public void Invalidate()
@@ -54,7 +57,7 @@ public sealed class ContextWindows : IDisposable
 
     private void OnEvent(IntPtr hook, uint type, IntPtr hwnd, int objectId, int childId, uint thread, uint time)
     {
-        Invalidate();
+        if (type == 3 || (chatWindow != IntPtr.Zero && GetAncestor(hwnd, 2) == chatWindow)) Invalidate();
     }
 
     public IntPtr SelectMainWindow(IntPtr previous)
@@ -78,6 +81,7 @@ public sealed class ContextWindows : IDisposable
                 return false;
             }, IntPtr.Zero);
         }
+        chatWindow = selected;
         return selected;
     }
 
@@ -93,7 +97,7 @@ public sealed class ContextWindows : IDisposable
         {
             using (var process = Process.GetProcessById((int)ProcessId(hwnd)))
             {
-                string path = process.MainModule.FileName;
+                string path = process.MainModule?.FileName ?? "";
                 return (process.ProcessName.Equals("ChatGPT", StringComparison.OrdinalIgnoreCase) ||
                         process.ProcessName.Equals("Codex", StringComparison.OrdinalIgnoreCase)) &&
                        (path.IndexOf(@"\OpenAI.Codex_", StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -156,6 +160,7 @@ public sealed class ContextWindows : IDisposable
     public void Dispose()
     {
         if (foregroundHook != IntPtr.Zero) UnhookWinEvent(foregroundHook);
+        if (focusHook != IntPtr.Zero) UnhookWinEvent(focusHook);
     }
 
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
