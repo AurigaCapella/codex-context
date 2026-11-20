@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex Context</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.mjs"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="mark" aria-hidden="true">&gt;_</span><strong>Codex Context</strong></div>
+    <label class="search">
+      <span class="sr-only">搜索本地会话</span>
+      <input id="search" type="search" placeholder="搜索本地会话">
+    </label>
+    <div class="section-label">会话 <span id="thread-count"></span></div>
+    <nav id="threads" aria-label="本地会话"></nav>
+    <div class="connection"><span id="connection-dot" class="dot"></span><span id="connection">正在读取本机会话</span></div>
+  </aside>
+  <main class="shell">
+    <header class="topbar">
+      <div class="heading"><div id="breadcrumb">本机会话</div><h1 id="thread-title">Codex Context</h1></div>
+      <button id="open-codex" class="button" type="button" disabled>在 Codex 打开 ↗</button>
+    </header>
+    <div class="workspace">
+      <section class="conversation" aria-label="会话记录">
+        <div id="transcript" class="transcript"></div>
+        <footer id="metrics" class="metrics" aria-label="会话状态栏"></footer>
+      </section>
+      <aside class="inspector" aria-label="辅助面板">
+        <div class="panel-header"><strong>上下文洞察</strong><button id="settings" type="button" class="quiet">费率设置</button></div>
+        <nav class="tabs" aria-label="检查视图">
+          <button type="button" data-tab="context" aria-pressed="true">上下文</button>
+          <button type="button" data-tab="tools" aria-pressed="false">工具调用</button>
+          <button type="button" data-tab="schema" aria-pressed="false">Schema</button>
+        </nav>
+        <div id="panel" class="panel"></div>
+      </aside>
+    </div>
+  </main>
+  <dialog id="detail">
+    <div class="dialog-heading"><h2 id="detail-title"></h2><form method="dialog"><button class="button" aria-label="关闭">关闭</button></form></div>
+    <pre id="detail-body"></pre>
+  </dialog>
+  <dialog id="rates-dialog">
+    <form id="rates-form">
+      <div class="dialog-heading"><h2>模型费率</h2><button class="button" type="button" id="close-rates">关闭</button></div>
+      <p>按每百万 Token 的美元价格估算。自定义费率保存在此浏览器中。</p>
+      <label>模型 ID <input name="model" required></label>
+      <div class="rate-fields">
+        <label>输入 <input name="input" type="number" min="0" step="any" required></label>
+        <label>缓存读取 <input name="cached" type="number" min="0" step="any" required></label>
+        <label>输出 <input name="output" type="number" min="0" step="any" required></label>
+        <label>缓存写入 <input name="cacheWrite" type="number" min="0" step="any"></label>
+      </div>
+      <div class="rate-actions"><button class="button" id="delete-rate" type="button">恢复默认</button><button class="button primary">保存费率</button></div>
+      <p id="rate-status" role="status"></p>
+    </form>
+  </dialog>
+  <output id="toast" aria-live="polite"></output>
+</body>
+</html>
