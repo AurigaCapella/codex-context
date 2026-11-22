@@ -19,6 +19,7 @@ internal sealed partial class ContextWidget : IDisposable
     private readonly DispatcherTimer chatProbe = new() { Interval = TimeSpan.FromSeconds(8) };
     private ContextWindows? windows;
     private WidgetMailbox? mailbox;
+    private TrayIcon? tray;
     private nint handle, codexWindow;
     private bool locked, followChat = true, probingChat, listening, running, refreshing;
     private bool loaded;
@@ -74,6 +75,7 @@ internal sealed partial class ContextWidget : IDisposable
             SetLock(locked);
             ApplyAppearance(appearance);
             Resume();
+            tray = new TrayIcon(() => window.IsVisible, Show, Hide, window.Close);
             if (options.ReadyEvent is not null)
             {
                 using var ready = EventWaitHandle.OpenExisting(options.ReadyEvent);
@@ -166,6 +168,11 @@ internal sealed partial class ContextWidget : IDisposable
     {
         if (command[0] == 'D') SetLock(false);
         if (command.Length > 1) SelectThread(command[1..].ToLowerInvariant());
+        Show();
+    }
+
+    private void Show()
+    {
         if (window.IsVisible) return;
         window.Show();
         SetLock(locked);
@@ -446,6 +453,7 @@ internal sealed partial class ContextWidget : IDisposable
     public void Dispose()
     {
         Pause();
+        tray?.Dispose();
         inspector?.Dispose();
         windows?.Dispose();
         mailbox?.Dispose();

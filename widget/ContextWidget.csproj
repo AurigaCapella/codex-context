@@ -3,6 +3,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <UseAppHost>false</UseAppHost>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -10,9 +11,12 @@
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
   <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
     <Compile Include="../plugin/context-windows.cs" Link="ContextWindows.cs" />
     <Compile Include="../plugin/composer-anchor.cs" Link="ComposerAnchor.cs" />
     <Compile Include="../plugin/widget-mailbox.cs" Link="WidgetMailbox.cs" />
     <EmbeddedResource Include="../plugin/native.xaml" LogicalName="ContextWidget.Layout.xaml" />
+    <EmbeddedResource Include="Tray.ico" LogicalName="ContextWidget.Tray.ico" />
   </ItemGroup>
 </Project>

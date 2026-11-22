@@ -4,11 +4,13 @@
 
 配色跟随 Codex 的浅色、深色或系统外观，并读取当前模式的自定义底色、文字色和强调色。调整 Codex 设置后，状态栏和检查面板会自动更新。
 
+Windows 通知区域保留 **Codex Context** 图标。点状态栏的「隐藏」后，可单击托盘图标恢复。右键菜单可显示、隐藏或退出状态栏，悬停可查看界面进程的 PID。图标显示在通知区域外侧还是折叠菜单中，由 Windows 任务栏设置决定。
+
 「跟随聊天」会将 Codex 标题栏与本地会话列表精确匹配。标题重名或暂时无法识别时保留当前统计。手动选择会话或创建分支后会固定所选会话，可重新勾选「跟随聊天」恢复同步。
 
 ## 启动
 
-需要 Node.js 22+、PowerShell 7 和支持 `thread/fork.lastTurnId` 的 Codex CLI。原生状态栏需要 Windows 的 [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)。在 GitHub Releases 下载所需版本的 Windows ZIP，解压后在顶层目录运行以下命令。
+需要 Node.js 22+、PowerShell 7 和支持 `thread/fork.lastTurnId` 的 Codex CLI。原生状态栏需要 Windows 的 [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)。从本目录运行以下命令。
 
 ```powershell
 & .\plugin\open.ps1
